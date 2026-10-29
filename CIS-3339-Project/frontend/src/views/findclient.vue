@@ -77,7 +77,7 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-300">
-            <tr @click="$router.push({ name: 'clientdetails', params: { id: client._id } })" v-for="client in clients"
+            <tr @click="router.push({ name: 'clientdetails', params: { id: client._id } })" v-for="client in clients"
               :key="client._id" class="cursor-pointer" :class="{ 'hoverRow': hoverId === client._id }"
               @mouseenter="hoverId = client._id" @mouseleave="hoverId = null">
               <td class="p-2 text-left">
@@ -95,81 +95,87 @@
   </main>
 </template>
 
-<script>
+<script setup>
+// MIGRATION: Options API -> Composition API (<script setup>)
+// - data() { clients, searchBy, firstName, lastName, phoneNumber, hoverId } -> ref()
+// - mounted()          -> onMounted()
+// - methods.loadData / handleSubmitForm -> plain functions
+// - template $router.push(...) -> router.push(...) from useRouter()
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { getClients, searchClients } from '../api/api'
 import { useToast } from 'vue-toastification'
 
-//Notifications
+// Notifications
 const toast = useToast()
+// was: $router in the template
+const router = useRouter()
 
-export default {
-  data() {
-    return {
-      //variable to store all clients and their information for the organization
-      clients: null,
-      // Parameters for search to occur
-      searchBy: '',
-      firstName: '',
-      lastName: '',
-      phoneNumber: '',
-      // variable stores the ID of the row that the mouse is currently hovering over (to highlight the row red)
-      hoverId: null,
-    }
-  },
-  mounted() {
-    // when component is mounted, load the data -
-    this.loadData()
-  },
-  methods: {
-    // method called when component is mounted
-    async loadData() {
-      // Resets all the variables
-      this.searchBy = ''
-      this.firstName = ''
-      this.lastName = ''
-      this.phoneNumber = ''
+// was: data() { return { ... } }
+// variable to store all clients and their information for the organization
+const clients = ref(null)
+// Parameters for search to occur
+const searchBy = ref('')
+const firstName = ref('')
+const lastName = ref('')
+const phoneNumber = ref('')
+// variable stores the ID of the row that the mouse is currently hovering over (to highlight the row red)
+const hoverId = ref(null)
 
-      // get list of clients
+// was: methods.loadData()
+// loads the full client list; also used by the Clear Search button
+async function loadData() {
+  // Resets all the variables
+  searchBy.value = ''
+  firstName.value = ''
+  lastName.value = ''
+  phoneNumber.value = ''
+
+  // get list of clients
+  try {
+    const response = await getClients()
+    clients.value = response
+  } catch (error) {
+    toast.error(error)
+  }
+}
+
+// was: methods.handleSubmitForm()
+// called when user searches for clients
+async function handleSubmitForm() {
+  // if user searched by client name
+  if (searchBy.value === 'Client Name') {
+    if (firstName.value || lastName.value) {
       try {
-        const response = await getClients();
-        this.clients = response;
+        const query = {
+          searchBy: 'name',
+          firstName: firstName.value,
+          lastName: lastName.value
+        }
+        const response = await searchClients(query)
+        clients.value = response
       } catch (error) {
         toast.error(error)
       }
-    },
-    // method called when user searches for clients
-    async handleSubmitForm() {
-      // if user searched by client name
-      if (this.searchBy === 'Client Name') {
-        if (this.firstName || this.lastName) {
-          try {
-            const query = {
-              searchBy: 'name',
-              firstName: this.firstName,
-              lastName: this.lastName,
-            }
-            const response = await searchClients(query)
-            this.clients = response;
-          } catch (error) {
-            toast.error(error)
-          }
+    }
+    // if user searches by client phone number
+  } else if (searchBy.value === 'Client Number') {
+    if (phoneNumber.value) {
+      try {
+        const query = {
+          searchBy: 'number',
+          phoneNumber: phoneNumber.value
         }
-        // if user searches by client phone number
-      } else if (this.searchBy === 'Client Number') {
-        if (this.phoneNumber) {
-          try {
-            const query = {
-              searchBy: 'number',
-              phoneNumber: this.phoneNumber
-            }
-            const response = await searchClients(query)
-            this.clients = response;
-          } catch (error) {
-            toast.error(error)
-          }
-        }
+        const response = await searchClients(query)
+        clients.value = response
+      } catch (error) {
+        toast.error(error)
       }
-    },
-  },
+    }
+  }
 }
+
+// was: mounted() { this.loadData() }
+// when component is mounted, load the data
+onMounted(loadData)
 </script>
