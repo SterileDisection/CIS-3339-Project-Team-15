@@ -31,22 +31,20 @@
     </div>
 </template>
 
-<script>
-  import { useLoggedInUserStore } from "../store/loggedInUser";
+<script setup>
+// MIGRATION: Options API -> Composition API (<script setup>)
+// - data() { username, password } -> ref()
+// - setup() { store }             -> top-level const used directly by the template
+// The template still calls store.login(username, password). Refs are unwrapped
+// automatically in the template, so the store gets plain strings like before.
+import { ref } from 'vue'
+import { useLoggedInUserStore } from '../store/loggedInUser'
 
-  export default {
-    data() {
-      return {
-        username: "",
-        password: "",
-      }
-    },
-    setup() {
-      const store = useLoggedInUserStore();
-      return {
-        store
-      }
-    }
-  }
+// was: setup() { const store = useLoggedInUserStore(); return { store } }
+const store = useLoggedInUserStore()
+
+// was: data() { return { username: "", password: "" } }
+const username = ref('')
+const password = ref('')
 </script>
 
