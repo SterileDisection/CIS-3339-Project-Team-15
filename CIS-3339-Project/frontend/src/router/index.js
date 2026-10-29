@@ -47,7 +47,9 @@ const routes = [
     path: '/eventdetails/:id',
     name: 'eventdetails',
     meta: { requiresAuth: true },
-    component: () => import('../views/eventdetails.vue')
+    component: () => import('../views/eventDetails.vue') 
+    // fixed: file is eventDetails.vue, the lowercase name 
+    // broke the build on Mac/Linux
   },
   {
     path: '/serviceform',
