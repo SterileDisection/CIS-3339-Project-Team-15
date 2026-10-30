@@ -76,59 +76,61 @@
     </main>
 </template>
 
-<script>
+<script setup>
+// MIGRATION: Options API -> Composition API (<script setup>)
+// - data() { service }   -> ref()
+// - setup() + validations() -> useVuelidate(rules, state) with the state passed in
+//                             explicitly, because there is no data() for Vuelidate to read anymore
+// - methods.handleSubmitForm -> plain function
+// - this.$router         -> useRouter()
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 // import vuelidate validations
 import useVuelidate from '@vuelidate/core'
 import { required } from '@vuelidate/validators'
 import { createService } from '../api/api'
 import { useToast } from 'vue-toastification'
 
-//Notifications
+// Notifications
 const toast = useToast()
+// was: this.$router
+const router = useRouter()
 
-export default {
-    data() {
-        return {
-            //variable to hold new service information
-            service: {
-                name: null,
-                description: null,
-                status: "Active",
-            },
-        }
-    },
-    setup() {
-        // Register Vuelidate
-        const v$ = useVuelidate();
-        return { v$ };
-    },
-    validations() {
-        // validations for service
-        return {
-            service: {
-                name: { required },
-            }
-        }
-    },
-    methods: {
-        // method called when user attempts to create new service
-        async handleSubmitForm() {
-            // Trigger validation
-            this.v$.$validate();
+// was: data() { return { service: {...} } }
+// variable to hold new service information
+const service = ref({
+  name: null,
+  description: null,
+  status: 'Active'
+})
 
-            if (this.v$.$error) {
-                // Form is invalid, do not proceed
-                return;
-            }
+// was: validations() { return { service: { name: { required } } } }
+const rules = {
+  service: {
+    name: { required }
+  }
+}
 
-            try {
-                const response = await createService(this.service);
-                toast.success(response)
-                this.$router.push('/findservice')
-            } catch (error) {
-                toast.error('Error creating new service:', error)
-            }
-        },
-    }
+// was: setup() { const v$ = useVuelidate(); return { v$ } }
+// The template still reads v$.service.name.$error, so the state key is "service"
+const v$ = useVuelidate(rules, { service })
+
+// was: methods.handleSubmitForm()
+// called when user attempts to create new service
+async function handleSubmitForm() {
+  // Trigger validation (was: this.v$.$validate(); if (this.v$.$error) return)
+  const isValid = await v$.value.$validate()
+  if (!isValid) {
+    // Form is invalid, do not proceed
+    return
+  }
+
+  try {
+    const response = await createService(service.value)
+    toast.success(response)
+    router.push('/findservice')
+  } catch (error) {
+    toast.error('Error creating new service:', error)
+  }
 }
 </script>
