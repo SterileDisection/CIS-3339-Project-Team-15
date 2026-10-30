@@ -186,7 +186,7 @@ import { useRouter } from 'vue-router'
 //import functionalities for validation
 import useVuelidate from '@vuelidate/core'
 import { required, email, numeric, minLength, maxLength } from '@vuelidate/validators'
-import { createClient } from '../../../../../../../../Downloads/CIS-3339-Project/frontend/src/api/api'
+import { createClient } from '../api/api'
 import { useToast } from 'vue-toastification'
 
 // Notifications
