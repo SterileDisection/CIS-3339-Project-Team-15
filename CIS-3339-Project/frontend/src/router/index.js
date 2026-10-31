@@ -16,7 +16,8 @@ const routes = [
     path: '/clientform',
     name: 'clientform',
     // only authenticated users can create clients
-    meta: { requiresAuth: true },
+    // F4: editor-only page; the global guard below redirects viewers who type this URL
+    meta: { requiresAuth: true, requiresEditor: true },
     component: () => import('../views/clientform.vue')
   },
   {
@@ -34,7 +35,8 @@ const routes = [
   {
     path: '/eventform',
     name: 'eventform',
-    meta: { requiresAuth: true },
+    // F4: editor-only page; the global guard below redirects viewers who type this URL
+    meta: { requiresAuth: true, requiresEditor: true },
     component: () => import('../views/eventform.vue')
   },
   {
@@ -54,7 +56,8 @@ const routes = [
   {
     path: '/serviceform',
     name: 'serviceform',
-    meta: { requiresAuth: true },
+    // F4: editor-only page; the global guard below redirects viewers who type this URL
+    meta: { requiresAuth: true, requiresEditor: true },
     component: () => import('../views/serviceform.vue')
   },
   {
@@ -75,15 +78,22 @@ const router = createRouter({
   routes
 })
 
-// protecting the routes
+// protecting the routes (one global guard for every route)
 router.beforeEach((to) => {
   const store = useLoggedInUserStore()
-  if (to.meta.requiresAuth && !store.isLoggedIn) {
+  // F4: requiresEditor implies requiresAuth, so check either flag here
+  if ((to.meta.requiresAuth || to.meta.requiresEditor) && !store.isLoggedIn) {
     return {
       path: '/login',
       // save the location we were at to come back later
       query: { redirect: to.fullPath },
     }
+  }
+  // F4: a logged-in user who isn't an editor (a viewer, or any unknown role) can't open
+  // editor-only pages by typing the URL; send them to the dashboard instead.
+  // This is an allow-list: only the exact role 'editor' gets through.
+  if (to.meta.requiresEditor && store.role !== 'editor') {
+    return { path: '/' }
   }
 })
 
