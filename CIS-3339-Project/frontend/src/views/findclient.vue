@@ -68,7 +68,14 @@
       </div>
       <!--Table showing list of Clients-->
       <div class="flex flex-col col-span-2">
-        <table class="min-w-full shadow-md rounded">
+        <!-- F2: loading state, shown while the request is in flight -->
+        <p v-if="loading" class="p-6 text-xl text-center text-gray-500 animate-pulse">Loading clients...</p>
+        <!-- F2: error state with the interceptor's message and a Retry button -->
+        <div v-else-if="error" class="p-6 bg-red-50 rounded shadow-md" role="alert">
+          <p class="font-bold text-red-900">Could not load clients: {{ error }}</p>
+          <button type="button" class="mt-3 bg-red-700 text-white rounded" @click="retry">Retry</button>
+        </div>
+        <table v-else class="min-w-full shadow-md rounded">
           <thead class="bg-gray-50 text-xl">
             <tr>
               <th class="p-4 text-left">Name</th>
@@ -88,6 +95,10 @@
               </td>
               <td class="p-2 text-left">{{ client.address.city }}</td>
             </tr>
+            <!-- F2: empty-results message -->
+            <tr v-if="!clients?.length">
+              <td colspan="3" class="p-4 text-center italic text-gray-500">No clients found</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -98,22 +109,29 @@
 <script setup>
 // MIGRATION: Options API -> Composition API (<script setup>)
 // - data() { clients, searchBy, firstName, lastName, phoneNumber, hoverId } -> ref()
-// - mounted()          -> onMounted()
+// - mounted()          -> the load call now runs directly in setup (see the F2 note below)
 // - methods.loadData / handleSubmitForm -> plain functions
 // - template $router.push(...) -> router.push(...) from useRouter()
-import { ref, onMounted } from 'vue'
+// F2: loading the list now goes through the shared useApi() composable, so the view gets
+//     loading / error / data for free, shows a Retry button on failure, and no longer has its
+//     own try/catch + toast for errors (the api interceptor builds the message)
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getClients, searchClients } from '../api/api'
-import { useToast } from 'vue-toastification'
+import { useApi } from '../composables/useApi'
 
-// Notifications
-const toast = useToast()
 // was: $router in the template
 const router = useRouter()
 
-// was: data() { return { ... } }
-// variable to store all clients and their information for the organization
-const clients = ref(null)
+// F2: one useApi() call drives the whole list.
+// execute() with no query loads everything; execute(query) runs a search.
+const {
+  data: clients,
+  loading,
+  error,
+  execute
+} = useApi((query) => (query ? searchClients(query) : getClients()))
+
 // Parameters for search to occur
 const searchBy = ref('')
 const firstName = ref('')
@@ -122,60 +140,52 @@ const phoneNumber = ref('')
 // variable stores the ID of the row that the mouse is currently hovering over (to highlight the row red)
 const hoverId = ref(null)
 
+// F2: remember the last request so Retry repeats exactly that (the full list or the same search)
+let lastQuery = null
+function runQuery(query = null) {
+  lastQuery = query
+  return execute(query)
+}
+function retry() {
+  execute(lastQuery)
+}
+
 // was: methods.loadData()
-// loads the full client list; also used by the Clear Search button
-async function loadData() {
+// loads the full list; also used by the Clear Search button
+function loadData() {
   // Resets all the variables
   searchBy.value = ''
   firstName.value = ''
   lastName.value = ''
   phoneNumber.value = ''
-
-  // get list of clients
-  try {
-    const response = await getClients()
-    clients.value = response
-  } catch (error) {
-    toast.error(error)
-  }
+  runQuery()
 }
 
 // was: methods.handleSubmitForm()
 // called when user searches for clients
-async function handleSubmitForm() {
+function handleSubmitForm() {
   // if user searched by client name
   if (searchBy.value === 'Client Name') {
     if (firstName.value || lastName.value) {
-      try {
-        const query = {
-          searchBy: 'name',
-          firstName: firstName.value,
-          lastName: lastName.value
-        }
-        const response = await searchClients(query)
-        clients.value = response
-      } catch (error) {
-        toast.error(error)
-      }
+      runQuery({
+        searchBy: 'name',
+        firstName: firstName.value,
+        lastName: lastName.value
+      })
     }
     // if user searches by client phone number
   } else if (searchBy.value === 'Client Number') {
     if (phoneNumber.value) {
-      try {
-        const query = {
-          searchBy: 'number',
-          phoneNumber: phoneNumber.value
-        }
-        const response = await searchClients(query)
-        clients.value = response
-      } catch (error) {
-        toast.error(error)
-      }
+      runQuery({
+        searchBy: 'number',
+        phoneNumber: phoneNumber.value
+      })
     }
   }
 }
 
 // was: mounted() { this.loadData() }
-// when component is mounted, load the data
-onMounted(loadData)
+// F2: load right away in setup (before the first render) so the page shows "Loading..."
+// immediately instead of flashing the empty message for a moment
+loadData()
 </script>
