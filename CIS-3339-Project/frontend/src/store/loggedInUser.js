@@ -33,6 +33,11 @@ function readToken(token) {
 export const useLoggedInUserStore = defineStore({
   id: 'loggedInUser',
   state: loggedOutState,
+  getters: {
+    // S1: the one role check every page uses. It's an allow-list: only the exact role 'editor'
+    // can change data, so a viewer, an empty role or any new role the backend adds can't.
+    isEditor: (state) => state.role === 'editor'
+  },
   actions: {
     async login(username, password) {
       try {

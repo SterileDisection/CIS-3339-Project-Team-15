@@ -2,12 +2,18 @@
 // import axios to make API calls
 import axios from 'axios'
 
+// Sprint 2: `npm run dev:mock` runs Vite in "mock" mode. Every request is then answered by the
+// in-memory mock backend in ./mockApi.js instead of the network, using the agreed S1/B1 response
+// shapes. MODE is replaced at build time, so `npm run build` drops the mock from the bundle entirely.
+const useMockApi = import.meta.env.MODE === 'mock'
+
 // Create HTTP client with the base URL, and specify that the data sent in the request body is JSON
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_ROOT_API,
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  ...(useMockApi && { adapter: async (config) => (await import('./mockApi')).mockAdapter(config) })
 })
 
 // Login related API calls
@@ -50,6 +56,8 @@ function toErrorMessage(error) {
   if (typeof body === 'string' && body.trim()) return body
   if (body && typeof body.error === 'string') return body.error
   if (body && typeof body.message === 'string') return body.message
+  // S1: requireRole('editor') answers 403 when a viewer tries to change data
+  if (error.response.status === 403) return 'You do not have permission to do that'
   return `Request failed (${error.response.status})`
 }
 
@@ -141,13 +149,30 @@ export const createEvent = async (eventData) => (await apiClient.post('/events/'
 export const updateEvent = async (id, eventData) =>
   (await apiClient.put(`/events/update/${id}`, eventData)).data
 
+// B1: agreed contract for PUT /events/register and PUT /events/deregister (?event=<id>&client=<id>)
+//   200 + the created/removed { eventId, clientId } record  -> first successful call
+//   200 + { message: 'Already registered' }                  -> register, client already signed up
+//   200 + { message: 'Not registered' }                      -> deregister, client wasn't signed up
+//   403 viewer, 404 client or event missing / in another organization -> rejected by the interceptor
+// Both calls resolve to { changed, message }, so views never have to inspect the raw response body.
+export const ALREADY_REGISTERED = 'Already registered'
+export const NOT_REGISTERED = 'Not registered'
+
 // API call to PUT add attendee to event
-export const registerAttendee = async (eventId, clientId) =>
-  (await apiClient.put('/events/register', {}, { params: { event: eventId, client: clientId } })).data
+export const registerAttendee = async (eventId, clientId) => {
+  const body = (await apiClient.put('/events/register', {}, { params: { event: eventId, client: clientId } })).data
+  return body?.message === ALREADY_REGISTERED
+    ? { changed: false, message: ALREADY_REGISTERED }
+    : { changed: true, message: 'Client registered for event' }
+}
 
 // API call to PUT remove attendee from event
-export const deregisterAttendee = async (eventId, clientId) =>
-  (await apiClient.put('/events/deregister', {}, { params: { event: eventId, client: clientId } })).data
+export const deregisterAttendee = async (eventId, clientId) => {
+  const body = (await apiClient.put('/events/deregister', {}, { params: { event: eventId, client: clientId } })).data
+  return body?.message === NOT_REGISTERED
+    ? { changed: false, message: NOT_REGISTERED }
+    : { changed: true, message: 'Client removed from event' }
+}
 
 // API call to DELETE event by ID
 export const deleteEvent = async (id) => (await apiClient.delete(`/events/${id}`)).data

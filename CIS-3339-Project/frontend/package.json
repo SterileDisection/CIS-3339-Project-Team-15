@@ -5,6 +5,7 @@
   "scripts": {
     "start": "vite",
     "dev": "vite",
+    "dev:mock": "vite --mode mock",
     "build": "vite build",
     "serve": "vite preview"
   },

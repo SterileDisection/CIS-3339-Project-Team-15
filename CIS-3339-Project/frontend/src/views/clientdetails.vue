@@ -158,14 +158,14 @@
         <!--Update Client submit button-->
         <div class="flex justify-between mt-10 mr-20">
           <button @click="submitUpdateClient" type="submit" class="bg-green-700 disabled:opacity-50 text-white rounded"
-            :disabled="user.role === 'viewer'">
+            :disabled="!user.isEditor">
             Update Client
           </button>
         </div>
         <!--Delete Client button-->
         <div class="flex justify-between mt-10 mr-20">
           <button @click="submitDeleteClient" type="submit" class="bg-red-700 disabled:opacity-50 text-white rounded"
-            :disabled="user.role === 'viewer'">
+            :disabled="!user.isEditor">
             Delete Client
           </button>
         </div>
@@ -202,9 +202,11 @@
               <td class="p-2 text-left">{{ event.name }}</td>
               <td class="p-2 text-left">{{ formatDate(event.date) }}</td>
               <td class="p-2 text-right">
+                <!-- S1: only editors can deregister, so viewers never see the remove button -->
                 <span class="remove-btn-wrapper">
                   <span class="remove-btn text-gray-400 cursor-pointer"
-                    @click.stop="removeClientFromEvent(client._id, event._id)" v-if="hoverId === event._id">X</span>
+                    @click.stop="removeClientFromEvent(client._id, event._id)"
+                    v-if="hoverId === event._id && user.isEditor">X</span>
                 </span>
               </td>
             </tr>
@@ -221,7 +223,7 @@
         <div class="flex justify-between">
           <!--button to add client to events-->
           <button @click="addClientToEvent" type="submit" class="mt-5 bg-red-700 disabled:opacity-50 text-white rounded"
-            :disabled="eventsSelected.length === 0 || user.role === 'viewer'">
+            :disabled="eventsSelected.length === 0 || !user.isEditor">
             Add Client to Selected Events
           </button>
         </div>
@@ -253,7 +255,8 @@ import {
   registerAttendee,
   deregisterAttendee,
   updateClient,
-  deleteClientbyId
+  deleteClientbyId,
+  ALREADY_REGISTERED
 } from '../api/api'
 import { formatDate } from '../utils/formatDate'
 import { useApi } from '../composables/useApi'
@@ -363,9 +366,11 @@ async function refreshEventLists() {
 // was: methods.removeClientFromEvent()
 // removes the client ID from the "attendees" array for that event
 async function removeClientFromEvent(clientId, eventId) {
-  const response = await deregister(eventId, clientId)
+  // B1: resolves to { changed, message }; "Not registered" is a normal answer, not an error
+  const result = await deregister(eventId, clientId)
   if (deregisterError.value) toast.error(deregisterError.value)
-  else toast.success(response)
+  else if (result.changed) toast.success(result.message)
+  else toast.info(result.message)
   // update events for which client is registered, and events for which client is not registered
   await refreshEventLists()
 }
@@ -374,10 +379,19 @@ async function removeClientFromEvent(clientId, eventId) {
 // registers the client for every event picked in the multiselect
 async function addClientToEvent() {
   const eventIds = eventsSelected.value.map((event) => event._id)
-  await registerForEvents(client.value._id, eventIds)
-  if (registerError.value) return toast.error(registerError.value)
+  // B1: one { changed, message } result per event; "Already registered" is not an error
+  const results = await registerForEvents(client.value._id, eventIds)
+  if (registerError.value) {
+    toast.error(registerError.value)
+  } else {
+    const added = results.filter((result) => result.changed).length
+    const skipped = results.length - added
+    if (added) toast.success(`Client registered for ${added} event${added === 1 ? '' : 's'}`)
+    if (skipped) toast.info(`${ALREADY_REGISTERED} for ${skipped} event${skipped === 1 ? '' : 's'}`)
+    eventsSelected.value = []
+  }
+  // refresh either way: if one of several registrations failed, the others may still have gone through
   await refreshEventLists()
-  eventsSelected.value = []
 }
 
 // was: methods.submitUpdateClient()

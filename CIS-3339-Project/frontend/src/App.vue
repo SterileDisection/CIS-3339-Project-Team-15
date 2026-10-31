@@ -31,21 +31,21 @@
               Logout
             </li>
             <!--Client Intake Form link - only shows if user is an editor-->
-            <li v-if="user.role === 'editor'">
+            <li v-if="user.isEditor">
               <router-link to="/clientform">
                 <span style="position: relative; top: 6px" class="material-icons">people</span>
                 Client Intake Form
               </router-link>
             </li>
             <!--Create Event link - only shows if user is an editor-->
-            <li v-if="user.role === 'editor'">
+            <li v-if="user.isEditor">
               <router-link to="/eventform">
                 <span style="position: relative; top: 6px" class="material-icons">event</span>
                 Create Event
               </router-link>
             </li>
             <!--Create Service link - only shows if user is an editor-->
-            <li v-if="user.role === 'editor'">
+            <li v-if="user.isEditor">
               <router-link to="/serviceform">
                 <span style="position: relative; top: 6px" class="material-icons">volunteer_activism</span>
                 Create Service

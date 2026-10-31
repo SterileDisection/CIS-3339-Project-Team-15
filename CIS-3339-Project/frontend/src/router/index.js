@@ -5,6 +5,8 @@ import { useLoggedInUserStore } from '../store/loggedInUser'
 const routes = [
   {
     path: '/',
+    // S1: the dashboard reads events and clients, and every read requires a logged-in user
+    meta: { requiresAuth: true },
     component: () => import('../views/home.vue')
   },
   {
@@ -91,8 +93,8 @@ router.beforeEach((to) => {
   }
   // F4: a logged-in user who isn't an editor (a viewer, or any unknown role) can't open
   // editor-only pages by typing the URL; send them to the dashboard instead.
-  // This is an allow-list: only the exact role 'editor' gets through.
-  if (to.meta.requiresEditor && store.role !== 'editor') {
+  // This is an allow-list: only the exact role 'editor' gets through (store.isEditor).
+  if (to.meta.requiresEditor && !store.isEditor) {
     return { path: '/' }
   }
 })

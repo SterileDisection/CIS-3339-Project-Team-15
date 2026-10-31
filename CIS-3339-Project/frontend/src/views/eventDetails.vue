@@ -136,14 +136,14 @@
         <!--Update Event button-->
         <div class="flex justify-between mt-10 mr-20">
           <button @click="submitEventUpdate" type="submit" class="bg-green-700 disabled:opacity-50 text-white rounded"
-            :disabled="user.role === 'viewer'">
+            :disabled="!user.isEditor">
             Update Event
           </button>
         </div>
         <!--Delete Event button-->
         <div class="flex justify-between mt-10 mr-20">
           <button @click="submitDeleteEvent" type="submit" class="bg-red-700  disabled:opacity-50 text-white rounded"
-            :disabled="user.role === 'viewer'">
+            :disabled="!user.isEditor">
             Delete Event
           </button>
           <!--Go back button-->
