@@ -132,6 +132,7 @@ import { required } from '@vuelidate/validators'
 import { useLoggedInUserStore } from '../store/loggedInUser'
 import { getServiceById, getEventsByServiceId, updateService, deleteService } from '../api/api'
 import { formatDate } from '../utils/formatDate'
+import { useApi } from '../composables/useApi'
 import { useToast } from 'vue-toastification'
 
 // Notifications
@@ -164,20 +165,22 @@ const rules = {
 // was: setup() { const v$ = useVuelidate(); ... }
 const v$ = useVuelidate(rules, { service })
 
+// F2: every API call in this view goes through useApi(), so there is no try/catch here.
+// error.value is the readable message the api interceptor already built. This also fixes
+// toast.error('error updating service', error), which passed the real message as toast
+// OPTIONS and threw it away.
+const { error: loadError, execute: loadService } = useApi((id) =>
+  Promise.all([getServiceById(id), getEventsByServiceId(id)])
+)
+const { error: updateError, execute: saveService } = useApi(updateService)
+const { error: deleteError, execute: removeService } = useApi(deleteService)
+
 // was: async mounted() { ... }
 // when component is mounted, load the service and the events that use it
 onMounted(async () => {
-  try {
-    const [serviceResponse, eventsResponse] = await Promise.all([
-      getServiceById(route.params.id),
-      getEventsByServiceId(route.params.id)
-    ])
-
-    service.value = serviceResponse
-    events.value = eventsResponse
-  } catch (error) {
-    toast.error(error)
-  }
+  const result = await loadService(route.params.id)
+  if (loadError.value) return toast.error(loadError.value)
+  ;[service.value, events.value] = result
 })
 
 // was: methods.submitServiceUpdate()
@@ -190,28 +193,22 @@ async function submitServiceUpdate() {
     return
   }
 
-  try {
-    const response = await updateService(route.params.id, service.value)
-    router.push('/findservice')
-    toast.success(response)
-  } catch (error) {
-    toast.error('error updating service', error)
-  }
+  const response = await saveService(route.params.id, service.value)
+  if (updateError.value) return toast.error(updateError.value)
+  router.push('/findservice')
+  toast.success(response)
 }
 
 // was: methods.submitDeleteService()
 // deletes the service - can only be deleted if no event uses it
 async function submitDeleteService() {
-  try {
-    if (events.value.length !== 0) {
-      toast.info('Service can not be deleted since it is being used by events.')
-      return
-    }
-    const response = await deleteService(route.params.id)
-    toast.success(response)
-    router.push('/findservice')
-  } catch (error) {
-    toast.error(error)
+  if (events.value.length !== 0) {
+    toast.info('Service can not be deleted since it is being used by events.')
+    return
   }
+  const response = await removeService(route.params.id)
+  if (deleteError.value) return toast.error(deleteError.value)
+  toast.success(response)
+  router.push('/findservice')
 }
 </script>

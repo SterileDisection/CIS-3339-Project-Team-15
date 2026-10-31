@@ -89,6 +89,7 @@ import { useRouter } from 'vue-router'
 import useVuelidate from '@vuelidate/core'
 import { required } from '@vuelidate/validators'
 import { createService } from '../api/api'
+import { useApi } from '../composables/useApi'
 import { useToast } from 'vue-toastification'
 
 // Notifications
@@ -115,6 +116,12 @@ const rules = {
 // The template still reads v$.service.name.$error, so the state key is "service"
 const v$ = useVuelidate(rules, { service })
 
+// F2: the create call goes through useApi(), so there is no try/catch here. error.value is the
+// readable message the api interceptor already built. This also fixes
+// toast.error('Error creating new service:', error), which passed the real message as toast
+// OPTIONS and threw it away.
+const { error: createError, execute: saveService } = useApi(createService)
+
 // was: methods.handleSubmitForm()
 // called when user attempts to create new service
 async function handleSubmitForm() {
@@ -125,12 +132,9 @@ async function handleSubmitForm() {
     return
   }
 
-  try {
-    const response = await createService(service.value)
-    toast.success(response)
-    router.push('/findservice')
-  } catch (error) {
-    toast.error('Error creating new service:', error)
-  }
+  const response = await saveService(service.value)
+  if (createError.value) return toast.error(createError.value)
+  toast.success(response)
+  router.push('/findservice')
 }
 </script>

@@ -209,6 +209,7 @@ import useVuelidate from '@vuelidate/core'
 import { required } from '@vuelidate/validators'
 import { useLoggedInUserStore } from '../store/loggedInUser'
 import { getEventById, getEventAttendees, getServices, updateEvent, deleteEvent } from '../api/api'
+import { useApi } from '../composables/useApi'
 import { useToast } from 'vue-toastification'
 
 // Notifications
@@ -262,25 +263,29 @@ const rules = {
 // was: setup() { const v$ = useVuelidate(); ... }
 const v$ = useVuelidate(rules, { event })
 
+// F2: every API call in this view goes through useApi(), so there is no try/catch here.
+// error.value is the readable message the api interceptor already built. This also fixes
+// toast.error('error loading data', error), which passed the real message as toast OPTIONS
+// and threw it away.
+const { error: loadError, execute: loadEvent } = useApi((id) =>
+  Promise.all([getEventById(id), getEventAttendees(id), getServices()])
+)
+const { error: updateError, execute: saveEvent } = useApi(updateEvent)
+const { error: deleteError, execute: removeEvent } = useApi(deleteEvent)
+
 // was: async mounted() { ... }
 // when component is mounted, load the event, its attendees and the service list
 onMounted(async () => {
-  try {
-    const [eventResponse, clientsResponse, servicesResponse] = await Promise.all([
-      getEventById(route.params.id),
-      getEventAttendees(route.params.id),
-      getServices()
-    ])
+  const result = await loadEvent(route.params.id)
+  if (loadError.value) return toast.error(loadError.value)
 
-    // the date input needs YYYY-MM-DD
-    eventResponse.date = new Date(eventResponse.date).toISOString().substring(0, 10)
+  const [eventResponse, clientsResponse, servicesResponse] = result
+  // the date input needs YYYY-MM-DD
+  eventResponse.date = new Date(eventResponse.date).toISOString().substring(0, 10)
 
-    event.value = eventResponse
-    clients.value = clientsResponse
-    services.value = servicesResponse
-  } catch (error) {
-    toast.error('error loading data', error)
-  }
+  event.value = eventResponse
+  clients.value = clientsResponse
+  services.value = servicesResponse
 })
 
 // was: methods.submitEventUpdate()
@@ -293,29 +298,23 @@ async function submitEventUpdate() {
     return
   }
 
-  try {
-    const response = await updateEvent(route.params.id, event.value)
-    toast.success(response)
-    router.push('/findevents')
-  } catch (error) {
-    toast.error('error updating event', error)
-  }
+  const response = await saveEvent(route.params.id, event.value)
+  if (updateError.value) return toast.error(updateError.value)
+  toast.success(response)
+  router.push('/findevents')
 }
 
 // was: methods.submitDeleteEvent()
 // deletes the event - can only be deleted if no attendees are in event
 async function submitDeleteEvent() {
-  try {
-    // was: if (this.event.attendees != 0) - same check, written with .length so it's clear
-    if (event.value.attendees.length !== 0) {
-      toast.info('Event can not be deleted since it has attendees.')
-      return
-    }
-    const response = await deleteEvent(route.params.id)
-    toast.success(response)
-    router.push('/findevents')
-  } catch (error) {
-    toast.error(error)
+  // was: if (this.event.attendees != 0) - same check, written with .length so it's clear
+  if (event.value.attendees.length !== 0) {
+    toast.info('Event can not be deleted since it has attendees.')
+    return
   }
+  const response = await removeEvent(route.params.id)
+  if (deleteError.value) return toast.error(deleteError.value)
+  toast.success(response)
+  router.push('/findevents')
 }
 </script>

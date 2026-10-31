@@ -256,6 +256,7 @@ import {
   deleteClientbyId
 } from '../api/api'
 import { formatDate } from '../utils/formatDate'
+import { useApi } from '../composables/useApi'
 import { useToast } from 'vue-toastification'
 
 // Notifications
@@ -317,22 +318,34 @@ const rules = {
 // was: setup() { const v$ = useVuelidate(); ... }
 const v$ = useVuelidate(rules, { client })
 
+// F2: every API call in this view goes through useApi(), so there is no try/catch here.
+// The api interceptor already turned any failure into one readable string (error.value),
+// and the view only decides where to show it. This also fixes the old
+// toast.error('error loading data:', error), which passed the real message as toast OPTIONS
+// and threw it away.
+const { error: loadError, execute: loadClient } = useApi((id) =>
+  Promise.all([getClientById(id), getClientEvents(id), getNonClientEvents(id)])
+)
+const { error: refreshError, execute: loadEventLists } = useApi((id) =>
+  Promise.all([getClientEvents(id), getNonClientEvents(id)])
+)
+const { error: deregisterError, execute: deregister } = useApi(deregisterAttendee)
+const { error: registerError, execute: registerForEvents } = useApi((clientId, eventIds) =>
+  Promise.all(eventIds.map((eventId) => registerAttendee(eventId, clientId)))
+)
+const { error: updateError, execute: saveClient } = useApi(updateClient)
+const { error: deleteError, execute: removeClient } = useApi(deleteClientbyId)
+
 // was: async mounted() { ... }
 // get client information, events the client is registered in, and events that client is not registered in
 onMounted(async () => {
-  try {
-    const [clientResponse, clientEventsResponse, nonClientEventsResponse] = await Promise.all([
-      getClientById(route.params.id),
-      getClientEvents(route.params.id),
-      getNonClientEvents(route.params.id)
-    ])
+  const result = await loadClient(route.params.id)
+  if (loadError.value) return toast.error(loadError.value)
 
-    client.value = clientResponse
-    clientEvents.value = clientEventsResponse
-    eventsFiltered.value = nonClientEventsResponse
-  } catch (error) {
-    toast.error('error loading data:', error)
-  }
+  const [clientResponse, clientEventsResponse, nonClientEventsResponse] = result
+  client.value = clientResponse
+  clientEvents.value = clientEventsResponse
+  eventsFiltered.value = nonClientEventsResponse
 })
 
 // was: methods.nameWithDate() - custom label for multiselect
@@ -342,39 +355,29 @@ function nameWithDate({ name, date }) {
 
 // reloads both event lists after a register or deregister
 async function refreshEventLists() {
-  clientEvents.value = await getClientEvents(route.params.id)
-  eventsFiltered.value = await getNonClientEvents(route.params.id)
+  const result = await loadEventLists(route.params.id)
+  if (refreshError.value) return toast.error(refreshError.value)
+  ;[clientEvents.value, eventsFiltered.value] = result
 }
 
 // was: methods.removeClientFromEvent()
 // removes the client ID from the "attendees" array for that event
 async function removeClientFromEvent(clientId, eventId) {
-  try {
-    const response = await deregisterAttendee(eventId, clientId)
-    toast.success(response)
-  } catch (error) {
-    toast.error(error)
-  }
+  const response = await deregister(eventId, clientId)
+  if (deregisterError.value) toast.error(deregisterError.value)
+  else toast.success(response)
   // update events for which client is registered, and events for which client is not registered
-  try {
-    await refreshEventLists()
-  } catch (error) {
-    toast.error(error)
-  }
+  await refreshEventLists()
 }
 
 // was: methods.addClientToEvent()
 // registers the client for every event picked in the multiselect
 async function addClientToEvent() {
-  try {
-    const clientId = client.value._id
-    const eventIds = eventsSelected.value.map((event) => event._id)
-    await Promise.all(eventIds.map((eventId) => registerAttendee(eventId, clientId)))
-    await refreshEventLists()
-    eventsSelected.value = []
-  } catch (error) {
-    toast.error(error)
-  }
+  const eventIds = eventsSelected.value.map((event) => event._id)
+  await registerForEvents(client.value._id, eventIds)
+  if (registerError.value) return toast.error(registerError.value)
+  await refreshEventLists()
+  eventsSelected.value = []
 }
 
 // was: methods.submitUpdateClient()
@@ -387,25 +390,19 @@ async function submitUpdateClient() {
     return
   }
 
-  try {
-    const response = await updateClient(route.params.id, client.value)
-    router.push('/findclient')
-    toast.success(response)
-  } catch (error) {
-    toast.error(error)
-  }
+  const response = await saveClient(route.params.id, client.value)
+  if (updateError.value) return toast.error(updateError.value)
+  router.push('/findclient')
+  toast.success(response)
 }
 
 // was: methods.submitDeleteClient()
 // called when user attempts to delete client
 async function submitDeleteClient() {
-  try {
-    const response = await deleteClientbyId(route.params.id)
-    toast.success(response)
-    router.push('/findclient')
-  } catch (error) {
-    toast.error(error)
-  }
+  const response = await removeClient(route.params.id)
+  if (deleteError.value) return toast.error(deleteError.value)
+  toast.success(response)
+  router.push('/findclient')
 }
 </script>
 

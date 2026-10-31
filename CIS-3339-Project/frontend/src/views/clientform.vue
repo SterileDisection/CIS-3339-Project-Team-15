@@ -187,6 +187,7 @@ import { useRouter } from 'vue-router'
 import useVuelidate from '@vuelidate/core'
 import { required, email, numeric, minLength, maxLength } from '@vuelidate/validators'
 import { createClient } from '../api/api'
+import { useApi } from '../composables/useApi'
 import { useToast } from 'vue-toastification'
 
 // Notifications
@@ -237,6 +238,10 @@ const rules = {
 // was: setup() { const v$ = useVuelidate(); return { v$ } }
 const v$ = useVuelidate(rules, { client })
 
+// F2: the create call goes through useApi(), so there is no try/catch here; error.value is the
+// readable message the api interceptor already built
+const { error: createError, execute: saveClient } = useApi(createClient)
+
 // was: methods.submitForm()
 // called when user submits the form
 async function submitForm() {
@@ -247,13 +252,10 @@ async function submitForm() {
     return
   }
 
-  try {
-    const response = await createClient(client.value)
-    router.push('/findclient')
-    toast.success(response)
-  } catch (error) {
-    toast.error(error)
-  }
+  const response = await saveClient(client.value)
+  if (createError.value) return toast.error(createError.value)
+  router.push('/findclient')
+  toast.success(response)
 }
 </script>
 

@@ -168,6 +168,7 @@ import { useRouter } from 'vue-router'
 import useVuelidate from '@vuelidate/core'
 import { required } from '@vuelidate/validators'
 import { getServices, createEvent } from '../api/api'
+import { useApi } from '../composables/useApi'
 import { useToast } from 'vue-toastification'
 
 // Notifications
@@ -223,15 +224,19 @@ const rules = {
 // was: setup() { const v$ = useVuelidate(); return { v$ } }
 const v$ = useVuelidate(rules, { event })
 
+// F2: both API calls go through useApi(), so there is no try/catch here. error.value is the
+// readable message the api interceptor already built. This also fixes
+// toast.error('error creating new event:', error), which passed the real message as toast
+// OPTIONS and threw it away.
+const { error: servicesError, execute: loadServices } = useApi(getServices)
+const { error: createError, execute: saveEvent } = useApi(createEvent)
+
 // was: async mounted() { ... this.activeServices = ... }
 // when component is mounted, load the active services for the checkbox list
 onMounted(async () => {
-  try {
-    const response = await getServices()
-    activeServices.value = response.filter((item) => item.status === 'Active')
-  } catch (error) {
-    toast.error(error)
-  }
+  const response = await loadServices()
+  if (servicesError.value) return toast.error(servicesError.value)
+  activeServices.value = response.filter((item) => item.status === 'Active')
 })
 
 // was: methods.handleSubmitForm()
@@ -245,12 +250,9 @@ async function handleSubmitForm() {
     return
   }
 
-  try {
-    const response = await createEvent(event.value)
-    router.push('/findevents')
-    toast.success(response)
-  } catch (error) {
-    toast.error('error creating new event:', error)
-  }
+  const response = await saveEvent(event.value)
+  if (createError.value) return toast.error(createError.value)
+  router.push('/findevents')
+  toast.success(response)
 }
 </script>
