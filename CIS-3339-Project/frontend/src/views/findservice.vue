@@ -68,27 +68,9 @@
           <p class="font-bold text-red-900">Could not load services: {{ error }}</p>
           <button type="button" class="mt-3 bg-red-700 text-white rounded" @click="retry">Retry</button>
         </div>
-        <table v-else class="min-w-full shadow-md rounded">
-          <thead class="bg-gray-50 text-xl">
-            <tr>
-              <th class="p-4 text-left" style="width: 25%;">Service Name</th>
-              <th class="p-4 text-left" style="width: 75%;">Service Description</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-300">
-            <tr @click="router.push({name: 'servicedetails', params: { id: service._id } })" 
-            v-for="service in services" :key="service._id" class="cursor-pointer"
-              :class="{ 'hoverRow': hoverId === service._id }" @mouseenter="hoverId = service._id"
-              @mouseleave="hoverId = null">
-              <td class="p-4 text-left">{{ service.name }}</td>
-              <td class="p-4 text-left text-sm">{{ service.description }}</td>
-            </tr>
-            <!-- F2: empty-results message -->
-            <tr v-if="!services?.length">
-              <td colspan="2" class="p-4 text-center italic text-gray-500">No services found</td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- F3: shared DataTable (sorting, 10 rows per page, "Showing X-Y of Z", empty message) -->
+        <DataTable v-else :columns="columns" :rows="services || []" empty-text="No services found"
+          @row-click="openDetails" />
       </div>
     </div>
   </main>
@@ -103,10 +85,12 @@
 // F2: loading the list now goes through the shared useApi() composable, so the view gets
 //     loading / error / data for free, shows a Retry button on failure, and no longer has its
 //     own try/catch + toast for errors (the api interceptor builds the message)
+// F3: the hand-written <table> was replaced by the shared DataTable component (sorting + paging)
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getServices, searchServices } from '../api/api'
 import { useApi } from '../composables/useApi'
+import DataTable from '../components/DataTable.vue'
 
 // was: $router in the template
 const router = useRouter()
@@ -124,8 +108,11 @@ const {
 const searchBy = ref(null)
 const name = ref(null)
 const description = ref(null)
-// variable stores the ID of the row that the mouse is currently hovering over (to highlight the row red)
-const hoverId = ref(null)
+// F3: columns for the shared DataTable
+const columns = [
+  { label: 'Service Name', field: 'name', style: 'width: 25%;' },
+  { label: 'Service Description', field: 'description', style: 'width: 75%;', cellClass: 'text-sm' }
+]
 
 // F2: remember the last request so Retry repeats exactly that (the full list or the same search)
 let lastQuery = null
@@ -167,6 +154,11 @@ function handleSubmitForm() {
       })
     }
   }
+}
+
+// F3: DataTable emits row-click (mouse click or Enter key) with the clicked record
+function openDetails(row) {
+  router.push({ name: 'servicedetails', params: { id: row._id } })
 }
 
 // was: mounted() { this.loadData() }

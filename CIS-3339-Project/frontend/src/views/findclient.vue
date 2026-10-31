@@ -75,32 +75,9 @@
           <p class="font-bold text-red-900">Could not load clients: {{ error }}</p>
           <button type="button" class="mt-3 bg-red-700 text-white rounded" @click="retry">Retry</button>
         </div>
-        <table v-else class="min-w-full shadow-md rounded">
-          <thead class="bg-gray-50 text-xl">
-            <tr>
-              <th class="p-4 text-left">Name</th>
-              <th class="p-4 text-left">Phone number</th>
-              <th class="p-4 text-left">City</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-300">
-            <tr @click="router.push({ name: 'clientdetails', params: { id: client._id } })" v-for="client in clients"
-              :key="client._id" class="cursor-pointer" :class="{ 'hoverRow': hoverId === client._id }"
-              @mouseenter="hoverId = client._id" @mouseleave="hoverId = null">
-              <td class="p-2 text-left">
-                {{ client.firstName + ' ' + client.lastName }}
-              </td>
-              <td class="p-2 text-left">
-                {{ client.phoneNumber.primary }}
-              </td>
-              <td class="p-2 text-left">{{ client.address.city }}</td>
-            </tr>
-            <!-- F2: empty-results message -->
-            <tr v-if="!clients?.length">
-              <td colspan="3" class="p-4 text-center italic text-gray-500">No clients found</td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- F3: shared DataTable (sorting, 10 rows per page, "Showing X-Y of Z", empty message) -->
+        <DataTable v-else :columns="columns" :rows="clients || []" empty-text="No clients found"
+          @row-click="openDetails" />
       </div>
     </div>
   </main>
@@ -115,10 +92,12 @@
 // F2: loading the list now goes through the shared useApi() composable, so the view gets
 //     loading / error / data for free, shows a Retry button on failure, and no longer has its
 //     own try/catch + toast for errors (the api interceptor builds the message)
+// F3: the hand-written <table> was replaced by the shared DataTable component (sorting + paging)
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getClients, searchClients } from '../api/api'
 import { useApi } from '../composables/useApi'
+import DataTable from '../components/DataTable.vue'
 
 // was: $router in the template
 const router = useRouter()
@@ -137,8 +116,12 @@ const searchBy = ref('')
 const firstName = ref('')
 const lastName = ref('')
 const phoneNumber = ref('')
-// variable stores the ID of the row that the mouse is currently hovering over (to highlight the row red)
-const hoverId = ref(null)
+// F3: columns for the shared DataTable (render only changes what is shown; sorting uses the field)
+const columns = [
+  { label: 'Name', field: 'firstName', render: (client) => `${client.firstName} ${client.lastName}` },
+  { label: 'Phone number', field: 'phoneNumber.primary' },
+  { label: 'City', field: 'address.city' }
+]
 
 // F2: remember the last request so Retry repeats exactly that (the full list or the same search)
 let lastQuery = null
@@ -182,6 +165,11 @@ function handleSubmitForm() {
       })
     }
   }
+}
+
+// F3: DataTable emits row-click (mouse click or Enter key) with the clicked record
+function openDetails(row) {
+  router.push({ name: 'clientdetails', params: { id: row._id } })
 }
 
 // was: mounted() { this.loadData() }

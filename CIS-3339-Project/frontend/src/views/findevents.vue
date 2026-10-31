@@ -66,29 +66,9 @@
           <p class="font-bold text-red-900">Could not load events: {{ error }}</p>
           <button type="button" class="mt-3 bg-red-700 text-white rounded" @click="retry">Retry</button>
         </div>
-        <table v-else class="min-w-full shadow-md rounded">
-          <thead class="bg-gray-50 text-xl">
-            <tr>
-              <th class="p-4 text-left">Event Name</th>
-              <th class="p-4 text-left">Event Date</th>
-              <th class="p-4 text-left">Event Address</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-300">
-            <tr @click="router.push({name: 'eventdetails', params: { id: event._id } })"
-              v-for="event in events" :key="event._id" class="cursor-pointer"
-              :class="{ 'hoverRow': hoverId === event._id }" @mouseenter="hoverId = event._id"
-              @mouseleave="hoverId = null">
-              <td class="p-2 text-left">{{ event.name }}</td>
-              <td class="p-2 text-left">{{ formatDate(event.date) }}</td>
-              <td class="p-2 text-left">{{ event.address.line1 }}</td>
-            </tr>
-            <!-- F2: empty-results message -->
-            <tr v-if="!events?.length">
-              <td colspan="3" class="p-4 text-center italic text-gray-500">No events found</td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- F3: shared DataTable (sorting, 10 rows per page, "Showing X-Y of Z", empty message) -->
+        <DataTable v-else :columns="columns" :rows="events || []" empty-text="No events found"
+          @row-click="openDetails" />
       </div>
     </div>
   </main>
@@ -105,10 +85,12 @@
 // F2: loading the list now goes through the shared useApi() composable, so the view gets
 //     loading / error / data for free, shows a Retry button on failure, and no longer has its
 //     own try/catch + toast for errors (the api interceptor builds the message)
+// F3: the hand-written <table> was replaced by the shared DataTable component (sorting + paging)
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getEvents, searchEvents } from '../api/api'
 import { useApi } from '../composables/useApi'
+import DataTable from '../components/DataTable.vue'
 import { formatDate } from '../utils/formatDate'
 
 // was: $router in the template
@@ -127,8 +109,12 @@ const {
 const searchBy = ref(null)
 const name = ref(null)
 const eventDate = ref(null)
-// variable stores the ID of the row that the mouse is currently hovering over (to highlight the row red)
-const hoverId = ref(null)
+// F3: columns for the shared DataTable (the date column sorts by the real date, then shows MM/DD/YYYY)
+const columns = [
+  { label: 'Event Name', field: 'name' },
+  { label: 'Event Date', field: 'date', render: (event) => formatDate(event.date) },
+  { label: 'Event Address', field: 'address.line1' }
+]
 
 // F2: remember the last request so Retry repeats exactly that (the full list or the same search)
 let lastQuery = null
@@ -171,6 +157,11 @@ function handleSubmitForm() {
       })
     }
   }
+}
+
+// F3: DataTable emits row-click (mouse click or Enter key) with the clicked record
+function openDetails(row) {
+  router.push({ name: 'eventdetails', params: { id: row._id } })
 }
 
 // was: mounted() { this.loadData() }
