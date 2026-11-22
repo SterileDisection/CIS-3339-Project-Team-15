@@ -2,18 +2,24 @@
 // import axios to make API calls
 import axios from 'axios'
 
-// Sprint 2: `npm run dev:mock` runs Vite in "mock" mode. Every request is then answered by the
-// in-memory mock backend in ./mockApi.js instead of the network, using the agreed S1/B1 response
-// shapes. MODE is replaced at build time, so `npm run build` drops the mock from the bundle entirely.
-const useMockApi = import.meta.env.MODE === 'mock'
+// Sprint 3 (D2): every call now goes to the real backend. The Sprint 2 mock (mockApi.js and the
+// dev:mock script) was removed once the backend implemented the agreed S1/B1/B2 contracts.
+//
+// The backend URL comes from VITE_ROOT_API. Vite reads it when it builds (frontend/.env, or an
+// environment variable set on the hosting service) and writes it into the bundle, so after
+// changing it you have to run `npm run build` again. There is no hard-coded localhost here.
+// A trailing slash is removed so '/clients' never turns into '//clients'.
+const ROOT_API = String(import.meta.env.VITE_ROOT_API || '').replace(/\/+$/, '')
+if (!ROOT_API) {
+  console.error('VITE_ROOT_API is not set. Add it to frontend/.env and rebuild (see frontend/README.md).')
+}
 
 // Create HTTP client with the base URL, and specify that the data sent in the request body is JSON
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_ROOT_API,
+  baseURL: ROOT_API,
   headers: {
     'Content-Type': 'application/json'
-  },
-  ...(useMockApi && { adapter: async (config) => (await import('./mockApi')).mockAdapter(config) })
+  }
 })
 
 // Login related API calls

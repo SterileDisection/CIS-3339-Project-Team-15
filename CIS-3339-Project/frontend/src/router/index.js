@@ -73,10 +73,18 @@ const routes = [
     name: 'servicedetails',
     meta: { requiresAuth: true },
     component: () => import('../views/servicedetails.vue')
+  },
+  {
+    // D2: any unknown URL goes back to the dashboard instead of showing a blank page
+    path: '/:pathMatch(.*)*',
+    redirect: '/'
   }
 ]
 const router = createRouter({
-  history: createWebHistory(),
+  // D2: HTML5 history mode (clean URLs like /clientdetails/123). BASE_URL comes from `base` in
+  // vite.config.js. Because there is no '#' in these URLs, the static host must send every
+  // unknown path to index.html (the "SPA fallback") - see public/_redirects and README.md.
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes
 })
 

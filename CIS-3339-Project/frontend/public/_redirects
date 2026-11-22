@@ -1,0 +1,4 @@
+# D2: SPA fallback for Netlify (and hosts that read the same file).
+# Every path that is not a real file is answered with index.html, so refreshing a
+# nested route like /clientdetails/123 loads the app instead of a 404.
+/*    /index.html    200

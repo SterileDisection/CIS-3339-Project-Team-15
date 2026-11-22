@@ -4,10 +4,12 @@ node_modules
 package-lock.json
 
 
-# local env file
-# .env
-# .env.local
-# .env.*.local
+# env files hold secrets (database password, JWT secret) and must never be committed:
+# the repo is public. Get .env from Canvas / the team, or copy .env.example.
+.env
+.env.local
+.env.*.local
+!.env.example
 
 # Log files
 npm-debug.log*
