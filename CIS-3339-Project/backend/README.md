@@ -1,52 +1,75 @@
 # Backend
 
-This implementation is for NodeJS based on [Express](https://expressjs.com/) and [MongoDB](https://www.mongodb.com/) and uses [mongoose](https://mongoosejs.com/) as the ODM.
+Node.js + [Express](https://expressjs.com/) REST API using [MongoDB](https://www.mongodb.com/)
+through [Mongoose](https://mongoosejs.com/). Requires **Node.js 18+**.
 
-## Project setup
+## Setup
 
-Install all dependencies.
-
-    npm install
-
-### Before startup
-You need to setup a MongoDB database (can be local or remote).
-
-Make sure you have a collection named 'org' in your database that contains at least one organization with the orgid listed in your environment variable (see below).
-
-An example document inside the org collection in the DB could look like:
-```
-{
-    "_id" : ObjectId("64e0380b3cc28d087655693b"),
-    "name" : "Community Center"
-}
+```powershell
+cd backend
+npm install
+npm run db:init    # organization, demo users, sample data (safe to run again)
+npm start          # http://localhost:3000
 ```
 
-The database also needs to contain users with hashed passwords and their role. We provide a sample script to create hashed passwords. Please read more about hased password with bcrypt https://heynode.com/blog/2020-04/salt-and-hash-passwords-bcrypt/. There should be at least one user with the viewer role and one with the editor role.
+There is no manual database setup anymore: the old `create_hash.js` utility and the hand-made
+`org` / `users` documents are replaced by `npm run db:init`. Configuration lives in `backend/.env`,
+which is **not committed** (the repo is public and it holds secrets): use the file submitted on
+Canvas, or copy `.env.example` to `.env` and fill it in. Every variable is explained in the
+[root README](../README.md#environment-files).
 
-An example document inside the 'users' collection in the DB could look like:
+## Scripts
+
+| Command | What it does |
+| --- | --- |
+| `npm start` | Start the API (`node app.js`) |
+| `npm run dev` | Start with nodemon, restarting on file changes |
+| `npm run db:init` | Check `.env`, create indexes, the `ORG_ID` organization, the viewer/editor accounts (bcrypt hashed) and sample data. Never deletes anything; running it again creates no duplicates. Exit code 1 on any configuration or connection problem. |
+| `npm run db:reset` | **Destructive.** Deletes the clients, events, services and users of `ORG_ID` and the isolation test org, then runs `db:init`. |
+| `npm run verify` | With the API running: checks the auth, role, organization isolation, registration, error shape, health and CORS rules over HTTP and prints PASS/FAIL. Use `API_URL=...` for a deployed API. |
+| `npm run lint` | ESLint + Prettier |
+
+## How a request is protected
+
+```text
+request -> CORS (CORS_ORIGIN only) -> requireAuth (401) -> requireRole('editor') (403, writes only)
+        -> route handler -> Mongoose query wrapped in withOrg(filter, req) -> errorHandler ({ error })
 ```
-{
-    "_id" : ObjectId("64e03e5e3cc28d0886756963"),
-    "username" : "marry",
-    "role" : "editor",
-    "password" : "$2b$10$Vt4jS2ORVImiuyhvAbS1DO8tnEUB0buUUadpFVoho6TfJXzKbRi8a",
-    "org" : ObjectId("64e0380b3cc28d087655693b")
-}
-```
 
-Setup a .env file with the following variables: MONGO_URL, PORT, ORG_ID and JWT_SECRET
+- `middleware/auth.js`: `requireAuth`, `requireRole(...roles)`
+- `utils/withOrg.js`: adds `{ orgId: req.user.orgId }` (from the verified token) to every query
+- `utils/http.js`: `HttpError`, `asyncHandler` (forwards async errors), `isValidId`,
+  `escapeRegex` (safe search), `pickFields` (stops a request from setting `_id` / `orgId`)
+- `middleware/errorHandler.js`: unknown routes -> 404; every error -> `{ "error": "..." }` with
+  400 / 401 / 403 / 404 / 409 / 500, never a stack trace
 
-    MONGO_URL= that is the Mongo URL connection string
-    PORT= e.g.3000
-    ORG_ID = that is the orgid
-    JWT_SECRET=this can be a randomly generated string. It is used to verify JWT tokens
+## Endpoints
 
-### Compiles and hot-reloads for development
+| Method | Path | Access |
+| --- | --- | --- |
+| GET | `/health` | public |
+| GET | `/org` | public (organization name for the nav bar) |
+| POST | `/users/login` | public |
+| GET | `/clients`, `/clients/id/:id`, `/clients/search`, `/clients/byzip` | logged in |
+| POST | `/clients` | editor |
+| PUT | `/clients/update/:id` | editor |
+| DELETE | `/clients/:id` (409 if registered for events) | editor |
+| GET | `/events`, `/events/id/:id`, `/events/search`, `/events/client/:id`, `/events/client/:id/not-registered`, `/events/attendees/:id`, `/events/service/:id`, `/events/attendance` | logged in |
+| POST | `/events` | editor |
+| PUT | `/events/update/:id` | editor |
+| PUT | `/events/register?event=&client=`, `/events/deregister?event=&client=` | editor |
+| DELETE | `/events/:id` (409 if it has attendees) | editor |
+| GET | `/services`, `/services/id/:id`, `/services/search` | logged in |
+| POST | `/services` | editor |
+| PUT | `/services/update/:id` | editor |
+| DELETE | `/services/:id` (409 if used by an event) | editor |
 
-To start up the backend for devlopment run:
+Search parameters: clients `searchBy=name&firstName=&lastName=` or `searchBy=number&phoneNumber=`;
+events `searchBy=name&name=` or `searchBy=date&eventDate=YYYY-MM-DD`; services
+`searchBy=name&name=` or `searchBy=description&description=`.
 
-    npm start
+## Data model notes
 
-## Postman Documentation
-
-More details about the API endpoints can be be found at <https://documenter.getpostman.com/view/25012176/2s9Y5Zv1xz>
+Every client, event, service and user has a single `orgId` field (the template mixed `org` and an
+`orgs` array). An event's registrations are the client ids in its `attendees` array; the register
+route adds them with `$addToSet`, so the same client can't appear twice.
