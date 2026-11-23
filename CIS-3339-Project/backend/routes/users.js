@@ -1,42 +1,56 @@
-// This file contains all API endpoints for interacting with the "users" collection in the MongoDB database
+// This file contains the API endpoint for logging in (the "users" collection)
+//
+// Sprint 3 (S1):
+// - a failed login always answers "Invalid username or password", whether the username or the
+//   password was wrong, and takes about the same time either way, so it can't be used to find
+//   out which usernames exist
+// - username and password must be plain strings (blocks NoSQL injection like { "$ne": null })
+// - the token now carries orgId and the user id. requireAuth and withOrg() read the
+//   organization from here, never from the request body or URL.
+// - tokens expire after JWT_EXPIRES_IN (default 8 hours) instead of 30 days
+
 const express = require('express');
 const router = express.Router();
-// import bcrypt for comparing password to hashed password
 const bcrypt = require('bcrypt');
-// import JWT (JSON Web Token) to create a web token to the user after a successful login - allows user to make API calls
 const jwt = require('jsonwebtoken');
 
-// import users data model schema
+const { config } = require('../config/env');
+const { HttpError, asyncHandler } = require('../utils/http');
 const { users } = require('../models/models');
 
-const org = process.env.ORG_ID;
+const INVALID_LOGIN = 'Invalid username or password';
 
-// API endpoint to handle login
-router.post('/login', async (req, res) => {
-  const { username, password } = req.body;
+// compared against when the username doesn't exist, so both failures cost one bcrypt check
+const DUMMY_HASH = bcrypt.hashSync('timing-safe-placeholder', 10);
 
-  try {
-    const user = await users.findOne({ username: username, org: org });
-    if (!user) {
-      return res.status(400).json({ message: 'Invalid username' });
+// POST /users/login  { username, password } -> { token }
+router.post(
+  '/login',
+  asyncHandler(async (req, res) => {
+    const { username, password } = req.body || {};
+    if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
+      throw new HttpError(400, 'Username and password are required');
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ message: 'Invalid username or password' });
+    // this backend instance serves one organization (ORG_ID), so only its users can log in
+    const user = await users.findOne({ username: username.trim(), orgId: config.orgId });
+    const passwordOk = await bcrypt.compare(password, user ? user.password : DUMMY_HASH);
+    if (!user || !passwordOk) {
+      throw new HttpError(400, INVALID_LOGIN);
     }
 
     const payload = {
-      name: user.name,
-      role: user.role
+      sub: String(user._id),
+      name: user.name || user.username,
+      role: user.role,
+      orgId: String(user.orgId)
     };
-
-    // token expires in 30 days. This is not best security practice but still demonstrates how JWT work
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '30d' });
+    const token = jwt.sign(payload, config.jwtSecret, {
+      algorithm: 'HS256',
+      expiresIn: config.jwtExpiresIn
+    });
     res.json({ token });
-  } catch (err) {
-    res.status(500).send('Server error');
-  }
-});
+  })
+);
 
 module.exports = router;
