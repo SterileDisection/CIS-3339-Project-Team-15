@@ -26,6 +26,7 @@ Canvas, or copy `.env.example` to `.env` and fill it in. Every variable is expla
 | `npm run dev` | Start with nodemon, restarting on file changes |
 | `npm run db:init` | Check `.env`, create indexes, the `ORG_ID` organization, the viewer/editor accounts (bcrypt hashed) and sample data. Never deletes anything; running it again creates no duplicates. Exit code 1 on any configuration or connection problem. |
 | `npm run db:reset` | **Destructive.** Deletes the clients, events, services and users of `ORG_ID` and the isolation test org, then runs `db:init`. |
+| `npm run db:status` | **Read-only.** Connects to `MONGO_URL` and reports whether the database is ready: connection time, the organization, both demo logins (account, role and password), record counts, the isolation test org and the unique username index. Changes nothing. Exit code 1 if anything is missing. |
 | `npm run verify` | With the API running: checks the auth, role, organization isolation, registration, error shape, health and CORS rules over HTTP and prints PASS/FAIL. Use `API_URL=...` for a deployed API. |
 | `npm run lint` | ESLint + Prettier |
 
